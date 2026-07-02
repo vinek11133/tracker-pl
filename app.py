@@ -2,19 +2,21 @@ import streamlit as st
 import datetime
 import smtplib
 import time
-import os
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-# Importy pre Selenium
+# Importy pro Selenium (prohlížeč na pozadí)
 from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
+from webdriver_manager.chrome import ChromeDriverManager
 
-# --- TITULOK STRÁNKY ---
-st.title("🏨 Hlídač cen (Cookie-Buster v2) - Hotel Molindrio")
-st.write("Skript spouští prohlížeč, odklikne anglickou cookie lištu a přečte klubovou cenu.")
+# --- TITULEK STRÁNKY ---
+st.title("🏨 Hlídač cen (Selenium Edice) - Hotel Molindrio")
+st.write("Skript spouští virtuální prohlížeč pro obcházení ochrany webu.")
 
+# --- KONFIGURACE ---
 URL = "https://www.plavalaguna.com/accommodation/hotel-molindrio/rooms/?adultNumber=2&childNumber=1&dateFrom=2026-10-26&dateTo=2026-11-01&childAges=10"
 
 ODESILATEL_EMAIL = st.secrets["ODESILATEL_EMAIL"]
@@ -40,62 +42,29 @@ def posli_email(predmet, telo):
         return False
 
 def ziskej_cenu():
+    # Nastavení skrytého prohlížeče Chrome pro Linux server (Streamlit)
     chrome_options = Options()
-    chrome_options.add_argument("--headless")  
+    chrome_options.add_argument("--headless")  # Bez grafického okna
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("window-size=1920x1080")
+    # Maskování hlavičky přímo v prohlížeči
     chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
-    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-    chrome_options.add_experimental_option('useAutomationExtension', False)
-    
-    chrome_options.binary_location = "/usr/bin/chromium"
 
     try:
-        driver = webdriver.Chrome(options=chrome_options)
-        driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
-            "source": "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
-        })
+        # Spuštění virtuálního prohlížeče
+        service = Service(ChromeDriverManager().install())
+        driver = webdriver.Chrome(service=service, options=chrome_options)
         
         driver.get(URL)
-        time.sleep(8) # Počkáme na plné načtení stránky a lišty
         
-        # --- KROK: ODKLIKNUTÍ COOKIE LIŠTY (Cíleno na "Allow All") ---
-        # Používáme podrobnější dotazy, které prohledají i vnitřní texty tlačítek
-        cookie_selectors = [
-            "//button[contains(., 'Allow All')]",
-            "//button[contains(., 'Allow all')]",
-            "//span[contains(., 'Allow All')]",
-            "//span[contains(., 'Allow all')]",
-            "//button[contains(., 'Accept')]",
-            "//button[contains(@class, 'cookie')]"
-        ]
+        # Klíčový moment: Počkáme 8 sekund, než se na stránce plně vykoná JavaScript a načtou se ceny
+        time.sleep(8)
         
-        cookie_odkliknuto = False
-        for selector in cookie_selectors:
-            try:
-                tlacitko = driver.find_element(By.XPATH, selector)
-                # Klikneme na element
-                tlacitko.click()
-                cookie_odkliknuto = True
-                st.toast("Cookie lišta ('Allow All') úspěšně odkliknuta!", icon="🍪")
-                time.sleep(4) # Počkáme 4 sekundy, než lišta zmizí z obrazovky
-                break
-            except:
-                continue
-                
-        if not cookie_odkliknuto:
-            st.warning("Automatické odkliknutí 'Allow All' selhalo, zkouším číst cenu přes lištu...")
-
-        # --- DIAGNOSTIKA: Vyfotíme stránku PO odkliknutí cookies ---
-        screenshot_path = "vystup_po_allow_all.png"
-        driver.save_screenshot(screenshot_path)
-        if os.path.exists(screenshot_path):
-            st.image(screenshot_path, caption="Snímek obrazovky po kliknutí na 'Allow All'")
-        
-        # --- KROK: ČTENÍ CENY ---
         cena = None
+        
+        # Najdeme všechny divy s class "price"
         cenove_bloky = driver.find_elements(By.CLASS_NAME, "price")
         
         for blok in cenove_bloky:
@@ -109,7 +78,7 @@ def ziskej_cenu():
             except:
                 continue
                 
-        driver.quit()
+        driver.quit()  # Zavřít prohlížeč
         return cena
         
     except Exception as e:
@@ -123,8 +92,9 @@ def ziskej_cenu():
 if "posledni_cena" not in st.session_state:
     st.session_state.posledni_cena = None
 
+# Tlačítko pro manuální kontrolu
 if st.button("Zkontrolovat cenu hned"):
-    with st.spinner("Spouštím prohlížeč a klikám na Allow All..."):
+    with st.spinner("Spouštím virtuální prohlížeč a načítám cenu... (cca 15 sekund)"):
         aktualni_cena = ziskej_cenu()
         
     if aktualni_cena:
@@ -132,7 +102,7 @@ if st.button("Zkontrolovat cenu hned"):
         
         if st.session_state.posledni_cena is None:
             st.session_state.posledni_cena = aktualni_cena
-            posli_email("Hlídač aktivován", f"Cena: {aktualni_cena} €")
+            posli_email("Hlídač aktivován na Streamlitu (Selenium)", f"První načtená cena přes prohlížeč: {aktualni_cena} €")
             st.success("Úvodní e-mail odeslán!")
         elif aktualni_cena != st.session_state.posledni_cena:
             posli_email("ZMĚNA CENY!", f"Nová klubová cena je {aktualni_cena} €")
@@ -141,4 +111,4 @@ if st.button("Zkontrolovat cenu hned"):
         else:
             st.info("Cena se od poslední kontroly nezměnila.")
     else:
-        st.error("Cenu se nepodařilo vyndat. Podívej se na nový obrázek, jestli už ta lišta zmizela.")
+        st.error("Cenu se nepodařilo z webu načíst ani přes virtuální prohlížeč.")
