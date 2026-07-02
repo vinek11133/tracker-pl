@@ -9,21 +9,18 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 # --- TITULEK STRÁNKY ---
-st.title("🏨 Hlídač cen s Google Tabulkou - Hotel Molindrio")
-st.write("Data se trvale ukládají do tvé Google Tabulky, takže se v Cloudu nikdy nesmažou.")
+st.title("🔒 Bezpečný hlídač cen - Hotel Molindrio")
+st.write("Aplikace je propojena přes zabezpečený Google Servisní účet.")
 
-# --- KONFIGURACE ---
+# --- KONFIGURACE (Sem vlož pouze veřejnou URL hotelu) ---
 URL = "https://www.plavalaguna.com/accommodation/hotel-molindrio/rooms/?adultNumber=2&childNumber=1&dateFrom=2026-10-26&dateTo=2026-11-01&childAges=10"
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-
-# URL tvé Google tabulky
-GSHEET_URL = "https://docs.google.com/spreadsheets/d/16QLqFTbWAzQD460sifLaEV_nC3ufOK4BloW9BqbSd5M/edit?gid=0#gid=0"
 
 ODESILATEL_EMAIL = st.secrets["ODESILATEL_EMAIL"]
 HESLO_APLIKACE = st.secrets["HESLO_APLIKACE"]
 PRIJEMCE_EMAIL = ["v.nekovarik@gmail.com"]
 
-# Propojení s Google Sheets
+# Bezpečné připojení k Google Sheets (vše si bere ze Secrets)
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def posli_email(predmet, telo):
@@ -64,36 +61,31 @@ def ziskej_cenu():
 # --- SKRIPT / ROZHRANÍ ---
 
 if st.button("Zkontrolovat cenu hned"):
-    with st.spinner("Stahuji aktuální cenu a synchronizuji s Google Tabulkou..."):
+    with st.spinner("Stahuji aktuální cenu a bezpečně zapisuji do Google Sheets..."):
         aktualni_cena = ziskej_cenu()
         
     if aktualni_cena:
         st.metric(label="Aktuální klubová cena", value=f"{aktualni_cena} €")
         
-        # Načteme stávající data z Google Tabulky
+        # Načtení dat (bez nutnosti zadávat URL v kódu)
         try:
-            df_existujici = conn.read(spreadsheet=GSHEET_URL, ttl=0)
-        except:
-            # Pokud je tabulka úplně prázdná, vytvoříme prázdný DataFrame
+            df_existujici = conn.read(ttl=0)
+        except Exception as e:
             df_existujici = pd.DataFrame(columns=["Datum", "Cena"])
             
         stara_cena = None
         if not df_existujici.empty:
             stara_cena = float(df_existujici.iloc[-1]["Cena"])
             
-        # Pokud je cena jiná než poslední uložená, zapíšeme ji
         if stara_cena is None or aktualni_cena != stara_cena:
             ted = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
             novy_radek = pd.DataFrame([[ted, aktualni_cena]], columns=["Datum", "Cena"])
-            
-            # Spojíme stará data s novým řádkem
             df_aktualizovane = pd.concat([df_existujici, novy_radek], ignore_index=True)
             
-            # Uložíme zpět do Google Tabulky
-            conn.update(spreadsheet=GSHEET_URL, data=df_aktualizovane)
-            st.toast("Nová cena zapsána do Google Tabulky!", icon="📊")
+            # Bezpečný zápis pod identitou robota
+            conn.update(data=df_aktualizovane)
+            st.toast("Nová cena bezpečně zapsána!", icon="💾")
             
-            # Odeslání e-mailů
             if stara_cena is None:
                 posli_email("Hlídač aktivován", f"První načtená cena: {aktualni_cena} €")
                 st.success("Úvodní e-mail odeslán!")
@@ -101,14 +93,14 @@ if st.button("Zkontrolovat cenu hned"):
                 posli_email("ZMĚNA CENY!", f"Nová klubová cena je {aktualni_cena} € (původně {stara_cena} €)")
                 st.warning("Cena se změnila! E-mail byl odeslán.")
         else:
-            st.info("Cena se nezměnila, zápis do Google Tabulky nebyl nutný.")
+            st.info("Cena se nezměnila, zápis nebyl nutný.")
     else:
         st.error("Cenu se nepodařilo z webu načíst.")
 
-# --- VYKRESLENÍ GRAFU Z GOOGLE TABULKY ---
-st.subheader("📈 Vývoj ceny (Data z Google Sheets)")
+# --- VYKRESLENÍ GRAFU ---
+st.subheader("📈 Vývoj ceny (Zabezpečená data)")
 try:
-    data = conn.read(spreadsheet=GSHEET_URL, ttl=0)
+    data = conn.read(ttl=0)
     if not data.empty:
         data_graf = data.set_index("Datum")
         st.line_chart(data_graf)
@@ -116,4 +108,4 @@ try:
     else:
         st.write("Tabulka je zatím prázdná. Klikni na tlačítko pro první zápis.")
 except Exception as e:
-    st.write("Zatím se nepodařilo načíst žádná data. Nejspíše je potřeba tabulku veřejně sdílet pro zápis.")
+    st.error(f"Chyba při načítání dat. Zkontroluj správnost klíčů v Secrets. Detaily: {e}")
