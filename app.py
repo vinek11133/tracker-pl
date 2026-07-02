@@ -9,17 +9,17 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 # --- TITULEK STRÁNKY ---
-st.title("🏨 Hlídač cen - Hotel Molindrio")
-st.write("Skript běží na pozadí a kontroluje klubovou cenu.")
+st.title("🏨 Hlídač cen s grafem - Hotel Molindrio")
+st.write("Skript kontroluje klubovou cenu a zaznamenává její vývoj do grafu.")
 
-# --- KONFIGURACE (Sem vlož svou novou správnou stránku) ---
+# --- KONFIGURACE ---
 URL = "https://www.plavalaguna.com/accommodation/hotel-molindrio/rooms/?adultNumber=2&childNumber=1&dateFrom=2026-10-26&dateTo=2026-11-01&childAges=10"
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+CSV_FILE = "historie_cen.csv"
 
-# Načtení e-mailů ze schované sekce Secrets ve Streamlitu
 ODESILATEL_EMAIL = st.secrets["ODESILATEL_EMAIL"]
 HESLO_APLIKACE = st.secrets["HESLO_APLIKACE"]
-PRIJEMCE_EMAIL = ["v.nekovarik@gmail.com"]
+PRIJEMCE_EMAIL = ["v.nekovarik = mail.com"]
 
 def posli_email(predmet, telo):
     try:
@@ -43,12 +43,9 @@ def ziskej_cenu():
     try:
         response = requests.get(URL, headers=HEADERS, timeout=20)
         soup = bs4.BeautifulSoup(response.text, "html.parser")
-        
-        # Hledáme cenové bloky
         cenove_bloky = soup.find_all("div", class_="price")
         
         for blok in cenove_bloky:
-            # Kontrola, zda jde o klubovou cenu
             if blok.find("p", class_="title") and "PLAVA LAGUNA CLUB" in blok.find("p", class_="title").text:
                 p_total = blok.find("p", class_="total")
                 if p_total:
