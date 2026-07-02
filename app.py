@@ -6,14 +6,14 @@ import os
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-# Importy pro Selenium
+# Importy pre Selenium
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 
-# --- TITULEK STRÁNKY ---
-st.title("🏨 Hlídač cen (Cookie-Buster Edice) - Hotel Molindrio")
-st.write("Skript spouští prohlížeč, odklikne cookie lištu a přečte klubovou cenu.")
+# --- TITULOK STRÁNKY ---
+st.title("🏨 Hlídač cen (Cookie-Buster v2) - Hotel Molindrio")
+st.write("Skript spouští prohlížeč, odklikne anglickou cookie lištu a přečte klubovou cenu.")
 
 URL = "https://www.plavalaguna.com/booking/?adultNumber=2&childNumber=1&dateFrom=2026-10-26&dateTo=2026-11-01&childAges=10&property=hotel-molindrio&rateId=RATE525987&propertyId=8538b43c0352df0deb11cc7d20a9995a"
 
@@ -59,40 +59,40 @@ def ziskej_cenu():
         })
         
         driver.get(URL)
-        time.sleep(6) # Počkáme na načtení stránky a lišty
+        time.sleep(8) # Počkáme na plné načtení stránky a lišty
         
-        # --- KROK: ODKLIKNUTÍ COOKIE LIŠTY ---
-        # Zkusíme najít tlačítko podle nejčastějších textů (česky i anglicky)
+        # --- KROK: ODKLIKNUTÍ COOKIE LIŠTY (Cíleno na "Allow All") ---
+        # Používáme podrobnější dotazy, které prohledají i vnitřní texty tlačítek
         cookie_selectors = [
-            "//button[contains(text(), 'Accept')]",
-            "//button[contains(text(), 'Přijmout')]",
-            "//button[contains(text(), 'Souhlasím')]",
-            "//button[contains(text(), 'ACCEPT')]",
-            "//button[contains(text(), 'ALLOW')]",
-            "//button[contains(@class, 'cookie')]",
-            "//div[contains(@class, 'cookie')]//button"
+            "//button[contains(., 'Allow All')]",
+            "//button[contains(., 'Allow all')]",
+            "//span[contains(., 'Allow All')]",
+            "//span[contains(., 'Allow all')]",
+            "//button[contains(., 'Accept')]",
+            "//button[contains(@class, 'cookie')]"
         ]
         
         cookie_odkliknuto = False
         for selector in cookie_selectors:
             try:
                 tlacitko = driver.find_element(By.XPATH, selector)
+                # Klikneme na element
                 tlacitko.click()
                 cookie_odkliknuto = True
-                st.toast("Cookie lišta nalezena a odkliknuta!", icon="🍪")
-                time.sleep(3) # Počkáme 3 sekundy, než animace lišty zmizí
+                st.toast("Cookie lišta ('Allow All') úspěšně odkliknuta!", icon="🍪")
+                time.sleep(4) # Počkáme 4 sekundy, než lišta zmizí z obrazovky
                 break
             except:
                 continue
                 
         if not cookie_odkliknuto:
-            st.warning("Automatické odkliknutí cookies selhalo, zkouším číst cenu i tak...")
+            st.warning("Automatické odkliknutí 'Allow All' selhalo, zkouším číst cenu přes lištu...")
 
         # --- DIAGNOSTIKA: Vyfotíme stránku PO odkliknutí cookies ---
-        screenshot_path = "vystup_po_cookies.png"
+        screenshot_path = "vystup_po_allow_all.png"
         driver.save_screenshot(screenshot_path)
         if os.path.exists(screenshot_path):
-            st.image(screenshot_path, caption="Snímek po pokusu o zavření cookie lišty")
+            st.image(screenshot_path, caption="Snímek obrazovky po kliknutí na 'Allow All'")
         
         # --- KROK: ČTENÍ CENY ---
         cena = None
@@ -124,7 +124,7 @@ if "posledni_cena" not in st.session_state:
     st.session_state.posledni_cena = None
 
 if st.button("Zkontrolovat cenu hned"):
-    with st.spinner("Spouštím prohlížeč a čistím cookies..."):
+    with st.spinner("Spouštím prohlížeč a klikám na Allow All..."):
         aktualni_cena = ziskej_cenu()
         
     if aktualni_cena:
@@ -141,4 +141,4 @@ if st.button("Zkontrolovat cenu hned"):
         else:
             st.info("Cena se od poslední kontroly nezměnila.")
     else:
-        st.error("Cenu se nepodařilo vyndat. Podívej se na nový obrázek, jestli ta lišta už zmizela.")
+        st.error("Cenu se nepodařilo vyndat. Podívej se na nový obrázek, jestli už ta lišta zmizela.")
