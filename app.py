@@ -3,6 +3,8 @@ import requests
 import bs4
 import datetime
 import smtplib
+import os
+import pandas as pd
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
@@ -57,9 +59,23 @@ def ziskej_cenu():
         st.error(f"Chyba při stahování webu: {e}")
         return None
 
-# Uchování ceny mezi obnoveními stránky
-if "posledni_cena" not in st.session_state:
-    st.session_state.posledni_cena = None
+def uloz_do_historie(cena):
+    # Získáme aktuální čas
+    ted = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    Novy_radek = pd.DataFrame([[ted, cena]], columns=["Datum", "Cena"])
+    
+    if os.path.exists(CSV_FILE):
+        # Pokud soubor existuje, načteme ho a přidáme řádek
+        df = pd.read_csv(CSV_FILE)
+        # Ochrana: Zapíšeme cenu, jen pokud je jiná než úplně poslední záznam (at nemáme hromadu stejných bodů)
+        if df.empty or df.iloc[-1]["Cena"] != cena:
+            df = pd.concat([df, novy_radek], ignore_index=True)
+            df.to_csv(CSV_FILE, index=False)
+    else:
+        # Pokud neexistuje, vytvoříme nový
+        novy_radek.to_csv(CSV_FILE, index=False)
+
+# --- SKRIPT / ROZHRANÍ ---
 
 # Tlačítko pro manuální kontrolu na webu
 if st.button("Zkontrolovat cenu hned"):
@@ -67,15 +83,40 @@ if st.button("Zkontrolovat cenu hned"):
     if aktualni_cena:
         st.metric(label="Aktuální klubová cena", value=f"{aktualni_cena} €")
         
-        if st.session_state.posledni_cena is None:
-            st.session_state.posledni_cena = aktualni_cena
-            posli_email("Hlídač aktivován na Streamlitu", f"První načtená cena: {aktualni_cena} €")
-            st.success("Úvodní e-mail odeslán!")
-        elif aktualni_cena != st.session_state.posledni_cena:
-            posli_email("ZMĚNA CENY!", f"Nová klubová cena je {aktualni_cena} €")
-            st.session_state.posledni_cena = aktualni_cena
-            st.warning("Cena se změnila! E-mail byl odeslán.")
+        # Načteme předchozí cenu z CSV (pokud existuje) pro porovnání kvůli e-mailu
+        stara_cena = None
+        if os.path.exists(CSV_FILE):
+            df_stary = pd.read_csv(CSV_FILE)
+            if not df_stary.empty:
+                stara_cena = df_stary.iloc[-1]["Cena"]
+        
+        # Uložíme nový bod do historie
+        uloz_do_historie(aktualni_cena)
+        
+        # Logika e-mailů
+        if stara_cena is None:
+            posli_email("Hlídač aktivován", f"První načtená cena: {aktualni_cena} €")
+            st.success("Úvodní e-mail odeslán a cena zapsána do historie!")
+        elif aktualni_cena != stara_cena:
+            posli_email("ZMĚNA CENY!", f"Nová klubová cena je {aktualni_cena} € (původně {stara_cena} €)")
+            st.warning(f"Cena se změnila! E-mail byl odeslán.")
         else:
-            st.info("Cena se od poslední kontroly nezměnila.")
+            st.info("Cena se od poslední kontroly nezměnila. Bod byl přesto zaznamenán.")
     else:
-        st.error("Cenu se nepodařilo z webu načíst (ověř správnost tříd v HTML).")
+        st.error("Cenu se nepodařilo z webu načíst.")
+
+# --- VYKRESLENÍ GRAFU ---
+st.subheader("📈 Vývoj ceny v čase")
+if os.path.exists(CSV_FILE):
+    data = pd.read_csv(CSV_FILE)
+    if not data.empty:
+        # Převod sloupce Datum na index pro hezké zobrazení na ose X
+        data_graf = data.set_index("Datum")
+        # Streamlit vestavěný čárový graf
+        st.line_chart(data_graf)
+        # Ukážeme i tabulku pod grafem
+        st.dataframe(data)
+    else:
+        st.write("Zatím nejsou k dispozici žádná data pro graf.")
+else:
+    st.write("Historie je prázdná. Klikni na tlačítko nahoře pro první zápis.")
