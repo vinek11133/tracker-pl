@@ -15,7 +15,7 @@ from selenium.webdriver.common.by import By
 st.title("🏨 Hlídač cen (Cookie-Buster v2) - Hotel Molindrio")
 st.write("Skript spouští prohlížeč, odklikne anglickou cookie lištu a přečte klubovou cenu.")
 
-URL = "https://www.plavalaguna.com/booking/?adultNumber=2&childNumber=1&dateFrom=2026-10-26&dateTo=2026-11-01&childAges=10&property=hotel-molindrio&rateId=RATE525987&propertyId=8538b43c0352df0deb11cc7d20a9995a"
+URL = "https://www.plavalaguna.com/accommodation/hotel-molindrio/rooms/?adultNumber=2&childNumber=1&dateFrom=2026-10-26&dateTo=2026-11-01&childAges=10"
 
 ODESILATEL_EMAIL = st.secrets["ODESILATEL_EMAIL"]
 HESLO_APLIKACE = st.secrets["HESLO_APLIKACE"]
