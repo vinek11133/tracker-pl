@@ -10,7 +10,7 @@ from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
-from webdriver_manager.chrome import ChromeDriverManager
+
 
 # --- TITULEK STRÁNKY ---
 st.title("🏨 Hlídač cen (Selenium Edice) - Hotel Molindrio")
@@ -42,29 +42,25 @@ def posli_email(predmet, telo):
         return False
 
 def ziskej_cenu():
-    # Nastavení skrytého prohlížeče Chrome pro Linux server (Streamlit)
     chrome_options = Options()
-    chrome_options.add_argument("--headless")  # Bez grafického okna
+    chrome_options.add_argument("--headless")  # Skrytý režim
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("window-size=1920x1080")
-    # Maskování hlavičky přímo v prohlížeči
     chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
+    
+    # !!! TATO ZMĚNA ŘÍKÁ SELENIU, KDE HLEDAT INSTALOVANÝ CHROMIUM V SYSTÉMU !!!
+    chrome_options.binary_location = "/usr/bin/chromium"
 
     try:
-        # Spuštění virtuálního prohlížeče
-        service = Service(ChromeDriverManager().install())
-        driver = webdriver.Chrome(service=service, options=chrome_options)
+        # Použijeme vestavěný driver ze systému, nebudeme instalovat přes webdriver-manager
+        driver = webdriver.Chrome(options=chrome_options)
         
         driver.get(URL)
-        
-        # Klíčový moment: Počkáme 8 sekund, než se na stránce plně vykoná JavaScript a načtou se ceny
-        time.sleep(8)
+        time.sleep(10)  # Necháme delší čas (10s) na načtení v cloudu
         
         cena = None
-        
-        # Najdeme všechny divy s class "price"
         cenove_bloky = driver.find_elements(By.CLASS_NAME, "price")
         
         for blok in cenove_bloky:
@@ -78,7 +74,7 @@ def ziskej_cenu():
             except:
                 continue
                 
-        driver.quit()  # Zavřít prohlížeč
+        driver.quit()
         return cena
         
     except Exception as e:
@@ -88,7 +84,6 @@ def ziskej_cenu():
         except:
             pass
         return None
-
 if "posledni_cena" not in st.session_state:
     st.session_state.posledni_cena = None
 
