@@ -193,7 +193,7 @@ def kontrola_na_pozadi(gc_info, spreadsheet_url, url, headers, odesilatel, heslo
             print(f"❌ Chyba v automatické kontrole na pozadí: {e}")
         
         # Počkej 6 hodin (6 hodin * 60 minut * 60 sekund = 21600 sekund)
-        time.sleep(21600)
+        time.sleep(60)
 
 # Bezpečné spuštění robota pouze jednou pro celý server
 @st.cache_resource
