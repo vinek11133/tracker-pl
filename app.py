@@ -109,27 +109,38 @@ try:
         st.write("Tabulka je zatím prázdná. Klikni na tlačítko pro první zápis.")
 except Exception as e:
     st.error(f"Chyba při načítání dat. Zkontroluj správnost klíčů v Secrets. Detaily: {e}")
-    # =========================================================================
+   # =========================================================================
 # 🤖 AUTOMATICKÁ KONTROLA NA POZADÍ (KAŽDÝCH 6 HODIN)
 # =========================================================================
 import threading
 import time
+import logging
+
+# Vynutíme, aby Streamlit posílal logy z pozadí do tvé konzole
+logging.basicConfig(level=logging.INFO)
 
 def kontrola_na_pozadi(gc_info, spreadsheet_url, url, headers, odesilatel, heslo, prijemci):
-    import requests
-    import bs4
-    import gspread
-    import datetime
-    import smtplib
-    from google.oauth2.service_account import Credentials
-    from email.mime.text import MIMEText
-    from email.mime.multipart import MIMEMultipart
-
-    print("🚀 Vlákno automatického hlídače na pozadí úspěšně nastartováno.")
+    logging.info("🚀 Vlákno automatického hlídače se pokouší nastartovat...")
     
+    try:
+        import requests
+        import bs4
+        import gspread
+        import datetime
+        import smtplib
+        from google.oauth2.service_account import Credentials
+        from email.mime.text import MIMEText
+        from email.mime.multipart import MIMEMultipart
+        logging.info("📦 Všechny knihovny na pozadí úspěšně načteny.")
+    except Exception as e:
+        logging.error(f"❌ Selhalo načítání knihoven v pozadí: {e}")
+        return
+
     while True:
         try:
-            # 1. Stažení ceny z webu (bezpečně na pozadí)
+            logging.info("[Automat] Spouštím pravidelnou kontrolu ceny...")
+            
+            # 1. Stažení ceny z webu
             response = requests.get(url, headers=headers, timeout=20)
             soup = bs4.BeautifulSoup(response.text, "html.parser")
             cenove_bloky = soup.find_all("div", class_="price")
@@ -144,7 +155,9 @@ def kontrola_na_pozadi(gc_info, spreadsheet_url, url, headers, odesilatel, heslo
                         break
             
             if aktualni_cena:
-                # 2. Připojení k Google Sheets přes gspread (vláknově bezpečné pro pozadí)
+                logging.info(f"[Automat] Úspěšně stažena cena: {aktualni_cena} €")
+                
+                # 2. Připojení k Google Sheets
                 scopes = ["https://www.googleapis.com/auth/spreadsheets"]
                 creds = Credentials.from_service_account_info(gc_info, scopes=scopes)
                 client = gspread.authorize(creds)
@@ -182,45 +195,51 @@ def kontrola_na_pozadi(gc_info, spreadsheet_url, url, headers, odesilatel, heslo
                     server.login(odesilatel, heslo)
                     server.send_message(msg)
                     server.quit()
-                    print(f"[Automat] Cena aktualizována na {aktualni_cena} € a email odeslán.")
+                    logging.info(f"[Automat] 🔥 Změna zaznamenána! Cena uložena a email odeslán.")
                 else:
-                    print("[Automat] Cena se nezměnila.")
+                    logging.info("[Automat] 🟢 Cena se od minulé kontroly nezměnila. Žádná akce.")
             else:
-                print("[Automat] Cenu se nepodařilo z webu vyčíst.")
+                logging.warning("[Automat] ⚠️ Cenu se nepodařilo z webu vyčíst.")
                 
         except Exception as e:
-            # Chyby na pozadí tiskneme do interní konzole Streamlitu (Manage App -> Logs)
-            print(f"❌ Chyba v automatické kontrole na pozadí: {e}")
+            logging.error(f"❌ Chyba uvnitř smyčky automatu: {e}")
         
-        # Počkej 6 hodin (6 hodin * 60 minut * 60 sekund = 21600 sekund)
-        time.sleep(60)
+        # Počkej 6 hodin (21600 sekund)
+        logging.info("[Automat] 💤 Jdu spát na 6 hodin...")
+        time.sleep(21600)
 
 # Bezpečné spuštění robota pouze jednou pro celý server
 @st.cache_resource
 def spustit_automaticky_hlidac():
-    # Vytáhneme šifry ze secrets, abychom je bezpečně předali robotovi na pozadí
-    gc_info = {
-        "type": st.secrets["connections"]["gsheets"]["type"],
-        "project_id": st.secrets["connections"]["gsheets"]["project_id"],
-        "private_key_id": st.secrets["connections"]["gsheets"]["private_key_id"],
-        "private_key": st.secrets["connections"]["gsheets"]["private_key"],
-        "client_email": st.secrets["connections"]["gsheets"]["client_email"],
-        "client_id": st.secrets["connections"]["gsheets"]["client_id"],
-        "auth_uri": st.secrets["connections"]["gsheets"]["auth_uri"],
-        "token_uri": st.secrets["connections"]["gsheets"]["token_uri"],
-        "auth_provider_x509_cert_url": st.secrets["connections"]["gsheets"]["auth_provider_x509_cert_url"],
-        "client_x509_cert_url": st.secrets["connections"]["gsheets"]["client_x509_cert_url"]
-    }
-    spreadsheet_url = st.secrets["connections"]["gsheets"]["spreadsheet"]
-    
-    # Nastartování robota v samostatném vlákně (daemon=True zajistí, že neumře s uživatelem)
-    t = threading.Thread(
-        target=kontrola_na_pozadi, 
-        args=(gc_info, spreadsheet_url, URL, HEADERS, ODESILATEL_EMAIL, HESLO_APLIKACE, PRIJEMCE_EMAIL),
-        daemon=True
-    )
-    t.start()
-    return True
+    try:
+        gc_info = {
+            "type": st.secrets["connections"]["gsheets"]["type"],
+            "project_id": st.secrets["connections"]["gsheets"]["project_id"],
+            "private_key_id": st.secrets["connections"]["gsheets"]["private_key_id"],
+            "private_key": st.secrets["connections"]["gsheets"]["private_key"],
+            "client_email": st.secrets["connections"]["gsheets"]["client_email"],
+            "client_id": st.secrets["connections"]["gsheets"]["client_id"],
+            "auth_uri": st.secrets["connections"]["gsheets"]["auth_uri"],
+            "token_uri": st.secrets["connections"]["gsheets"]["token_uri"],
+            "auth_provider_x509_cert_url": st.secrets["connections"]["gsheets"]["auth_provider_x509_cert_url"],
+            "client_x509_cert_url": st.secrets["connections"]["gsheets"]["client_x509_cert_url"]
+        }
+        spreadsheet_url = st.secrets["connections"]["gsheets"]["spreadsheet"]
+        
+        t = threading.Thread(
+            target=kontrola_na_pozadi, 
+            args=(gc_info, spreadsheet_url, URL, HEADERS, ODESILATEL_EMAIL, HESLO_APLIKACE, PRIJEMCE_EMAIL),
+            daemon=True
+        )
+        t.start()
+        logging.info("✅ Vlákno Threading úspěšně spuštěno z hlavní aplikace.")
+        return True
+    except Exception as e:
+        logging.error(f"❌ Selhalo spuštění inicializace hlídače: {e}")
+        return False
 
-# Spuštění hlídače
-spustit_automaticky_hlidac()
+# Spuštění hlídače a zobrazení stavu v bočním panelu aplikace
+if spustit_automaticky_hlidac():
+    st.sidebar.success("🤖 Automatický hlídač (6h) běží na pozadí.")
+else:
+    st.sidebar.error("🤖 Automatický hlídač se nespustil.")
