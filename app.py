@@ -163,13 +163,18 @@ def kontrola_na_pozadi(gc_info, spreadsheet_url, url, headers, odesilatel, heslo
                 client = gspread.authorize(creds)
                 
                 sheet = client.open_by_url(spreadsheet_url).sheet1
-                vsechna_data = sheet.get_all_records()
-                
-                stara_cena = None
-                if vsechna_data:
-                    posledni_radek = vsechna_data[-1]
-                    if "Cena" in posledni_radek:
-                        stara_cena = float(posledni_radek["Cena"])
+# Vynutíme stažení SUROVÝCH dat (UNFORMATTED_VALUE), Google ignoruje čárky a pošle čisté číslo
+vsechna_data = sheet.get_all_records(value_render_option='UNFORMATTED_VALUE')
+
+stara_cena = None
+if vsechna_data:
+    posledni_radek = vsechna_data[-1]
+    if "Cena" in posledni_radek:
+        raw_cena = posledni_radek["Cena"]
+        # Pojistka: Pokud by to Google přece jen poslal jako text s čárkou, přepíšeme ji na tečku
+        if isinstance(raw_cena, str):
+            raw_cena = raw_cena.replace(",", ".")
+        stara_cena = float(raw_cena)
                 
                 # 3. Vyhodnocení změny ceny
                 if stara_cena is None or aktualni_cena != stara_cena:
